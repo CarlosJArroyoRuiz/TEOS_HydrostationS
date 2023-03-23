@@ -1,0 +1,101 @@
+---
+title: "Lab Assignment TEOS Lab"
+author: "Carlos J. Arroyo Ruiz"
+date: "2023-03-16"
+output:
+ prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+#### Brief description
+
+Spiciness, in oceanographic terms, is defined as the relationship between the Absolute Salinity and Conservative Temperature at constant density in a body of seawater (Rudnick, n.d.).
+
+http://chowder.ucsd.edu/Rudnick/Spice.html
+
+#### Hypothesis
+The original question which started this assigment was "Does spiciness affect the solubility of oxygen in seawater?". Thus the null hypothesis became "The ocean's spiciness does not have a significant effect on the dissolved oxygen concentration".
+
+## In order to test this we ploted the data:
+
+
+### Load required libraries
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(gsw)
+```
+
+### Import the Hydrostation data
+```{r warning=FALSE, message=FALSE}
+hydrostation_bottle <- read_delim("hydrostation_bottle.txt", 
+    delim = "\t", escape_double = FALSE, 
+    col_names = FALSE, trim_ws = TRUE, skip = 31)
+
+hydrostation_bottle_names <- read_csv("hydrostation_bottle.txt", 
+    skip = 30)
+
+colnames(hydrostation_bottle)=colnames(hydrostation_bottle_names)
+
+View(hydrostation_bottle)
+```
+
+### Graphs
+```{r warning=FALSE, message=FALSE}
+?gsw_spiciness0
+?gsw_SA_from_SP
+
+hydrostation_bottle=
+hydrostation_bottle %>%
+   filter(`O2(1)`!=-999)
+
+hydrostation_bottle %>%
+  ggplot()+
+  geom_point(aes(x=decy,y=`O2(1)`))+
+  scale_y_continuous()+
+  scale_x_continuous()+
+  theme_classic()
+
+HydroS_plot=
+  hydrostation_bottle %>%
+   filter(Sal1!=-999)%>%
+   filter(`O2(1)`!=-999)%>%
+   filter(Temp!=-999) %>%
+   filter(Depth!=-999 & Depth<100)%>%
+   mutate(Pres_gsw = gsw_p_from_z(Depth*-1,latN))%>%
+   mutate(S_abs_gsw=gsw_SA_from_SP(Sal1,Pres_gsw,360-lonW,latN))%>%
+   mutate(T_cons_gsw=gsw_CT_from_t(S_abs_gsw,Temp,Pres_gsw)) %>%
+   mutate(Sig_th_gsw=gsw_sigma0(S_abs_gsw,T_cons_gsw))%>%
+   mutate(Spiciness_gsw=gsw_spiciness0(S_abs_gsw,T_cons_gsw))
+
+HydroS_correctedS_a=
+  HydroS_plot%>%
+  filter(Sig_th_gsw<0)%>%
+  mutate(Pres_gsw = gsw_p_from_z(Depth*-1,latN))%>%
+  mutate(S_abs_gsw=gsw_SA_from_SP(CTD_S,Pres_gsw,360-lonW,latN))%>%
+  mutate(T_cons_gsw=gsw_CT_from_t(S_abs_gsw,Temp,Pres_gsw))%>%
+  mutate(Sig_th_gsw=gsw_sigma0(S_abs_gsw,T_cons_gsw))%>%
+  mutate(Spiciness_gsw=gsw_spiciness0(S_abs_gsw,T_cons_gsw))
+
+HydroS_correctedS_b=
+  HydroS_plot %>%
+  filter(Sig_th_gsw>0)
+
+common=intersect(colnames(HydroS_correctedS_a),colnames(HydroS_correctedS_b))
+
+HydroS_corrected=rbind(HydroS_correctedS_a[common],HydroS_correctedS_b[common])
+
+HydroS_corrected %>%
+  ggplot()+
+  geom_point(aes(x=Spiciness_gsw,y=`O2(1)`))+
+  scale_y_continuous()+
+  scale_x_continuous()+
+  xlab(expression(paste("Spiciness (kg/m"^"3",")")))+
+  ylab(expression("Disolved Oxygen Concentration (μmol/kg)"))+
+  theme_classic()
+
+summary(lm(`O2(1)`~Spiciness_gsw, data=HydroS_corrected))
+```
+
+#### Results and Summary
+
+It was observed in the graph that the spiciness of the seawater did indeed affect the dissolved oxygen concentration, with the graph showing a non-linear correlation between the two factors. Although, instead of the dissolved oxygen concentration increasing in conjunction with spiciness, it shows an inverse proportion, with the concentration decreasing as the spiciness of the water increases. To corroborate this observed trend, a summary was performed on the data and it gave a p-value of 2.2e-16, indicating that there is relationship between the spiciness and oxygen concentration, but as the graph showed a non-linear trend, there might one or a few factors that are also involved such as photosynthesis, temperature, salinity or pressure that might be the reason for this particular outcome.
